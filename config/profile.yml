@@ -1,0 +1,67 @@
+# house-ops User Profile
+
+user:
+  name: ""
+  commute_origin: ""
+  commute_max_minutes: 40
+
+search:
+  mode: rent
+  buyer_type: renter
+
+budget:
+  rent_max: 20000
+  buy_max: null
+  monthly_payment_max: null
+
+finance:
+  monthly_income: null
+  savings: null
+  youth_loan_eligible: null
+
+current_property:
+  estimated_value: null
+  loan_remaining: null
+  purchase_year: null
+  selling_strategy: null
+
+property:
+  size_min: 8
+  size_max: null
+  floor_min: 2
+  types:
+    include: ["華廈", "大樓", "套房", "獨立套房"]
+    exclude: ["公寓", "預售屋", "店面", "辦公室", "車位", "雅房", "分租套房", "合租"]
+  age_max: 40
+  elevator: optional
+  parking: optional
+  pet: false
+
+regions:
+  - city: "新北市"
+    districts: ["板橋區"]
+
+lifestyle:
+  mrt_walk_max: 15
+  priorities:
+    - mrt
+    - supermarket
+
+narrative:
+  deal_breakers:
+    - "頂樓加蓋"
+    - "地下室"
+    - "雅房"
+    - "合租"
+    - "分租套房"
+    - "公寓"
+    - "一樓"
+  required_features:
+    - "陽台"
+    - "獨立衛浴"
+    - "廚房"
+    - "客廳"
+  nice_to_have:
+    - "南北採光"
+    - "社區管理"
+  notes: "板橋區租屋測試跑，月租上限 2 萬，必須為獨立整間（非雅房/分租/合租），必要設備：陽台、獨立廁所、廚房、客廳。"

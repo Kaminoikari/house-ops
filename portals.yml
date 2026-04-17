@@ -1,0 +1,46 @@
+# house-ops Portal Configuration
+
+title_filter:
+  property_types:
+    include: ["華廈", "大樓", "套房", "獨立套房"]
+    exclude: ["公寓", "預售屋", "店面", "辦公室", "車位", "工業用", "雅房", "分租套房", "合租"]
+  price:
+    rent_max: 20000
+    buy_max: 30000000
+  size_min: 8
+
+tracked_portals:
+  - name: "591 租屋"
+    type: rent
+    enabled: true
+    url_template: "https://rent.591.com.tw/list?region=3&section=42&rentprice=0,{rent_max}&area={size_min},&kind=1,2"
+
+  - name: "591 買屋"
+    type: buy
+    enabled: false
+    url_template: "https://sale.591.com.tw/?region={region_code}&price=0,{buy_max}&area={size_min},"
+
+  - name: "樂屋網 租屋"
+    type: rent
+    enabled: false
+    base_url: "https://www.rakuya.com.tw/rent/search"
+
+  - name: "信義房屋"
+    type: buy
+    enabled: false
+    base_url: "https://www.sinyi.com.tw/buy/list"
+
+  - name: "永慶房屋"
+    type: buy
+    enabled: false
+    base_url: "https://www.yungching.com.tw/buy"
+
+market_reference:
+  lvr_api:
+    enabled: true
+    use_for: price_comparison
+
+search_queries:
+  - name: "591 rent discovery"
+    query: "site:rent.591.com.tw {districts} {rent_max}以下"
+    enabled: true
