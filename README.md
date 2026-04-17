@@ -93,11 +93,78 @@ agent-browser --version
 ## 腳本
 
 ```bash
+# 日常
+node scripts/scan-591.mjs         # 爬蟲：依 profile.yml 條件掃 591
+node scripts/eval-591.mjs --from-pipeline 10   # 評估 pipeline 前 10 筆
+node scripts/rank-listings.mjs --rewrite       # Phase 1.5 排序重寫 pipeline.md
+node scripts/run-daily.mjs        # 🌅 一鍵跑：scan → eval 今日新 → 寫日報
+
+# 維護
 node merge-tracker.mjs           # 合併待新增 TSV 至 tracker.md
 node verify-pipeline.mjs         # 檢查 pipeline 完整性
 node dedup-tracker.mjs           # 移除重複追蹤條目
 node --test tests/**/*.test.mjs  # 執行所有測試
 ```
+
+---
+
+## 自動排程（macOS launchd）
+
+每天固定時間自動跑 `run-daily.mjs`，產 `reports/daily/YYYY-MM-DD.md`。
+
+### 安裝步驟
+
+1. 編輯 `launchd/com.house-ops.daily.plist.example`，把 `YOUR_USERNAME` 換成你的 macOS 使用者名稱（`whoami` 查詢），如需調整執行時間改 `StartCalendarInterval` 的 Hour / Minute（預設每日 09:00）。
+
+2. 複製到使用者 LaunchAgents：
+   ```bash
+   cp launchd/com.house-ops.daily.plist.example ~/Library/LaunchAgents/com.house-ops.daily.plist
+   ```
+
+3. 載入並啟動：
+   ```bash
+   launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.house-ops.daily.plist
+   launchctl start com.house-ops.daily   # 立即手動觸發一次做測試
+   ```
+
+4. 確認已註冊：
+   ```bash
+   launchctl list | grep house-ops
+   tail -f data/logs/daily.out.log       # 看每次跑的 stdout
+   ls reports/daily/                     # 看每日日報
+   ```
+
+### Mac 熟睡解方
+
+launchd 只在 Mac 醒著時觸發。若你的 Mac 夜間熟睡，可設定自動喚醒：
+
+```bash
+# 工作日 08:55 自動喚醒（09:00 跑完會自行進入睡眠）
+sudo pmset repeat wakeorpoweron MTWRF 08:55:00
+```
+
+### 解除安裝
+
+```bash
+launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.house-ops.daily.plist
+rm ~/Library/LaunchAgents/com.house-ops.daily.plist
+```
+
+---
+
+## 修改搜尋條件
+
+所有條件集中在 **`config/profile.yml`**，修改後不必動 code：
+
+| 欄位 | 影響 |
+|---|---|
+| `budget.rent_max` | 月租上限 |
+| `property.size_min` | 最小坪數 |
+| `regions[].city` + `districts` | 搜尋縣市與行政區（可多城市、多區）|
+| `narrative.deal_breakers` | 標題命中直接排除 |
+| `narrative.required_features` | Phase 2 評估時檢查必備設備 |
+
+`config/591-sections.yml` 是系統層（591 的 region/section 代碼對照表），除非 591 改變編碼否則不用動。
 
 ---
 

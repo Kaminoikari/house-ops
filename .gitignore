@@ -6,4 +6,8 @@ node_modules/
 .DS_Store
 .claude/
 data/scan-history.tsv
+data/logs/
+data/top3-per-district.txt
 batch/tracker-additions/*.tsv
+reports/daily/*.md
+!reports/daily/.gitkeep

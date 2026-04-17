@@ -8,5 +8,8 @@
     "merge": "node merge-tracker.mjs",
     "verify": "node verify-pipeline.mjs",
     "dedup": "node dedup-tracker.mjs"
+  },
+  "dependencies": {
+    "yaml": "^2.8.3"
   }
 }
