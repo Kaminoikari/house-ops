@@ -21,6 +21,8 @@ const EXTRACT_JS = `
   (() => {
     const pick = (sel) => { const n = document.querySelector(sel); return n ? (n.innerText || '').trim() : ''; };
     const pickAll = (sel) => Array.from(document.querySelectorAll(sel)).map(n => (n.innerText || '').trim()).filter(Boolean);
+    const addrNode = pick('[class*="address"], [class*="adress"], [class*="positon"], [class*="position"]');
+    const addrMatch = addrNode.match(/(地址[:：]\\s*)?(\\S*?區[^\\n,，。\\s]{2,40})/);
     return JSON.stringify({
       url: location.href,
       title: document.title,
@@ -30,6 +32,8 @@ const EXTRACT_JS = `
       facility: pickAll('.facility.service-facility, .facility, [class*="service-facility"]')[0] || '',
       description: pick('.house-condition-content, .introContent, [class*="introduction"], [class*="about"]'),
       location: pick('.location, [class*="location-map"]'),
+      addressBlock: addrNode,
+      address: addrMatch ? addrMatch[2] : '',
       agent: pickAll('.info-agent, .agent-name, [class*="agent"], [class*="contact"]')[0] || '',
       allText: (document.body.innerText || '').slice(0, 6000)
     });
@@ -38,7 +42,15 @@ const EXTRACT_JS = `
 
 function fetchDetail(url) {
   run(`agent-browser open "${url}"`);
-  run(`agent-browser wait 2500`);
+  for (const waitMs of [2500, 3500, 5000]) {
+    run(`agent-browser wait ${waitMs}`);
+    const out = run(`agent-browser eval ${JSON.stringify(EXTRACT_JS)}`);
+    const first = out.indexOf('"{');
+    const last = out.lastIndexOf('}"');
+    if (first < 0) continue;
+    const detail = JSON.parse(JSON.parse(out.slice(first, last + 2)));
+    if (detail.info && detail.info.length >= 50) return detail;
+  }
   const out = run(`agent-browser eval ${JSON.stringify(EXTRACT_JS)}`);
   const first = out.indexOf('"{');
   const last = out.lastIndexOf('}"');
@@ -78,15 +90,14 @@ function checkRequired(detail, parsed) {
 }
 
 function checkDealBreakers(detail, parsed) {
-  const { description, allText, title } = detail;
-  const corpus = [title, description, allText].join('\n');
+  const { description, title } = detail;
+  const descCorpus = [title, description].join('\n');
   const hits = [];
-  if (/頂樓加蓋|違建加蓋/.test(corpus)) hits.push('頂樓加蓋');
-  if (/地下室/.test(corpus) || /^B\d+$/.test(parsed.floor)) hits.push('地下室');
-  if (/雅房/.test(corpus)) hits.push('雅房');
-  if (/分租|合租/.test(corpus)) hits.push('分租/合租');
+  if (/頂樓加蓋|違建加蓋/.test(descCorpus)) hits.push('頂樓加蓋');
+  if (/地下室/.test(descCorpus) || /^B\d+$/.test(parsed.floor)) hits.push('地下室');
+  if (/雅房|分租套房|分租中|限分租|求分租|合租套房|招合租|求合租|限合租/.test(descCorpus)) hits.push('雅房/分租/合租');
   if (parsed.floor === '1') hits.push('一樓');
-  if (parsed.building_type === '公寓' && !/電梯/.test(detail.facility)) hits.push('公寓(無電梯)');
+  if (parsed.building_type === '公寓') hits.push('公寓(建物類型)');
   return hits;
 }
 
@@ -165,9 +176,8 @@ function nextReportNum() {
 
 function writeReport(detail, parsed, required, dealBreakers, scoring) {
   const num = nextReportNum();
-  const corpus = `${detail.info}\n${detail.location}\n${detail.allText}`;
-  const addrMatch = corpus.match(/板橋區[-\s]*[^\s\n|]{2,30}/);
-  const addr = addrMatch ? addrMatch[0].replace(/\s+/g, '').replace(/^板橋區-?/, '板橋區-') : '板橋區';
+  const addr = detail.address
+    || (detail.allText.match(/板橋區[^\s\n,，。|]{2,30}/) || ['板橋區'])[0];
   const slug = slugify(addr);
   const fname = `${num}-banqiao-${slug}-${TODAY}.md`;
   const fpath = resolve(REPORTS_DIR, fname);
@@ -247,8 +257,12 @@ _此報告由 eval-591.mjs 自動產生，需搭配實地看屋驗證。_
 async function evalOne(url) {
   console.log(`\n▸ 評估 ${url}`);
   const detail = fetchDetail(url);
+  if (/頁面不存在|物件不存在|已關閉|被刪除/.test(detail.title + detail.allText)) {
+    console.log(`  💀 已下架 (expired)`);
+    return { url, expired: true };
+  }
   if (!detail.info || detail.info.length < 50) {
-    console.log(`  ⚠️ 詳情頁內容過少，可能已下架或需登入：${detail.info?.slice(0, 100)}`);
+    console.log(`  ⚠️ 詳情頁內容過少，可能需登入或動態渲染失敗`);
     return null;
   }
   const parsed = parseInfo(detail.info);
@@ -280,10 +294,12 @@ async function main() {
     process.exit(1);
   }
   const results = [];
+  const expired = [];
   for (const u of urls) {
     try {
       const r = await evalOne(u);
-      if (r) results.push(r);
+      if (r?.expired) expired.push(r);
+      else if (r) results.push(r);
     } catch (e) {
       console.error(`✗ ${u}: ${e.message}`);
     }
@@ -296,6 +312,7 @@ async function main() {
     const tag = r.score >= 4.0 ? '🟢' : r.score >= 3.5 ? '🟡' : '🔴';
     console.log(`${tag} ${r.score.toFixed(1)}  ${r.fname}${r.dealBreakers.length ? '  ⚠️ ' + r.dealBreakers.join(',') : ''}`);
   }
+  if (expired.length) console.log(`\n💀 已下架：${expired.length} 筆 (${expired.map(e => e.url.split('/').pop()).join(', ')})`);
 }
 
 main().catch(e => { console.error(e); process.exit(1); });

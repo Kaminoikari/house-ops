@@ -92,7 +92,7 @@ function titleFilter(l) {
 const normalize = (s) => s.replace(/\s+/g, '').replace(/台/g, '臺').toLowerCase();
 
 async function main() {
-  const baseUrl = 'https://rent.591.com.tw/list?region=3&section=26&rentprice=0,20000&area=8,&kind=1,2&order=posttime&orderType=desc';
+  const baseUrl = 'https://rent.591.com.tw/list?region=3&section=26&rentprice=0,20000&area=8,&kind=1,2&shape=2,4,6&order=posttime&orderType=desc';
 
   console.log(`[scan] opening base URL`);
   run(`agent-browser open "${baseUrl}"`);

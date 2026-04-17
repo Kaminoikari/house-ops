@@ -13,7 +13,7 @@ tracked_portals:
   - name: "591 租屋"
     type: rent
     enabled: true
-    url_template: "https://rent.591.com.tw/list?region=3&section=42&rentprice=0,{rent_max}&area={size_min},&kind=1,2"
+    url_template: "https://rent.591.com.tw/list?region=3&section=26&shape=2,4,6&rentprice=0,{rent_max}&area={size_min},&kind=1,2"
 
   - name: "591 買屋"
     type: buy
