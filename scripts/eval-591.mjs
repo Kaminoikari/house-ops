@@ -292,6 +292,9 @@ async function main() {
     const n = parseInt(args[1] || '3');
     const pipe = readFileSync(resolve(ROOT, 'data/pipeline.md'), 'utf8');
     urls = [...pipe.matchAll(/^- \[ \] (https:\/\/rent\.591\.com\.tw\/\d+)/gm)].map(m => m[1]).slice(0, n);
+  } else if (args[0] === '--from-file') {
+    const file = readFileSync(resolve(ROOT, args[1]), 'utf8');
+    urls = [...new Set(file.split('\n').map(l => l.trim()).filter(l => /^https:\/\/rent\.591\.com\.tw\/\d+$/.test(l)))];
   } else {
     urls = args;
   }
