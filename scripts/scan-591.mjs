@@ -69,9 +69,13 @@ function parseListing(raw) {
   };
 }
 
+const RE_ELEVATOR_SIGNAL = /電梯|大樓|華廈|社宅|社會住宅|社會宅|包租代管|公宅/;
+const RE_PARKING_ONLY = /停車位|車位$|B\d+大?(停車|車)位|機械車位|平面車位/;
+
 function titleFilter(l) {
   const reasons = [];
   const text = `${l.title} ${l.full}`;
+  if (RE_PARKING_ONLY.test(l.title)) reasons.push('停車位');
   if (l.price_num && l.price_num > 20000) reasons.push('price>20000');
   if (l.size != null && l.size < 8) reasons.push('size<8');
   if (l.type === '分租套房' || l.type === '雅房') reasons.push(`type=${l.type}`);
@@ -79,7 +83,7 @@ function titleFilter(l) {
   if (/頂樓加蓋|加蓋/.test(text)) reasons.push('keyword:頂樓加蓋');
   if (/地下室/.test(text) || /^B\d+$/.test(l.floor)) reasons.push('地下室');
   if (l.floor === '1') reasons.push('floor=1');
-  if (l.total_floor && l.total_floor <= 5 && !/電梯|大樓|華廈|社宅/.test(text)) {
+  if (l.total_floor && l.total_floor <= 5 && !RE_ELEVATOR_SIGNAL.test(text)) {
     reasons.push(`疑似公寓(${l.floor}F/${l.total_floor}F)`);
   }
   return reasons;
