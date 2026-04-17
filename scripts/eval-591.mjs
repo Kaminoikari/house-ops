@@ -159,9 +159,12 @@ function scoreFiveDim(detail, parsed, required, dealBreakers) {
   return { scores, total: Math.round(weighted * 10) / 10 };
 }
 
+const DIST_SLUG = { '板橋區':'banqiao','中和區':'zhonghe','三重區':'sanchong','中正區':'zhongzheng','大同區':'datong','中山區':'zhongshan','松山區':'songshan','大安區':'daan','萬華區':'wanhua','信義區':'xinyi','士林區':'shilin','南港區':'nangang' };
+const RE_DISTRICT_ANY = /(板橋區|中和區|三重區|中正區|大同區|中山區|松山區|大安區|萬華區|信義區|士林區|南港區)[-\s]?([^\s\n,，。|]{0,20})?/;
+
 function slugify(addr) {
   return (addr || 'unknown')
-    .replace(/板橋區-?/, '')
+    .replace(/(板橋區|中和區|三重區|中正區|大同區|中山區|松山區|大安區|萬華區|信義區|士林區|南港區)-?/, '')
     .replace(/[^\w\u4e00-\u9fff]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 30) || 'unknown';
@@ -176,10 +179,13 @@ function nextReportNum() {
 
 function writeReport(detail, parsed, required, dealBreakers, scoring) {
   const num = nextReportNum();
-  const addr = detail.address
-    || (detail.allText.match(/板橋區[^\s\n,，。|]{2,30}/) || ['板橋區'])[0];
-  const slug = slugify(addr);
-  const fname = `${num}-banqiao-${slug}-${TODAY}.md`;
+  const corpus = `${detail.address || ''}\n${detail.info}\n${detail.allText}`;
+  const distM = corpus.match(RE_DISTRICT_ANY);
+  const district = distM ? distM[1] : '未知區';
+  const addr = distM ? `${distM[1]}-${distM[2] || ''}`.replace(/-$/, '') : district;
+  const citySlug = DIST_SLUG[district] || 'unknown';
+  const slug = slugify(distM?.[2] || addr);
+  const fname = `${num}-${citySlug}-${slug}-${TODAY}.md`;
   const fpath = resolve(REPORTS_DIR, fname);
 
   const passList = Object.entries(required).map(([k, v]) => `- ${v ? '✅' : '❌'} ${k}`).join('\n');
@@ -242,7 +248,7 @@ ${detail.description || '_591 未提供屋況介紹_'}
 
 ## 議價策略
 - 社會住宅類：通常以政府定價，議價空間低，重點在審核速度
-- 一般物件：可從單坪租金切入（本案 ${parsed.rent && parsed.size ? Math.round(parsed.rent / parsed.size) : '?'} 元/坪），板橋區 2024 均值約 900-1100 元/坪
+- 一般物件：可從單坪租金切入（本案 ${parsed.rent && parsed.size ? Math.round(parsed.rent / parsed.size) : '?'} 元/坪），${district} 2024 市場均值視區域而異（北市精華區 1500-2000、外圍區 1000-1400、新北 800-1200 元/坪）
 - 缺陷切入點：${dealBreakers.join('、') || '無重大瑕疵可談'}
 
 ---

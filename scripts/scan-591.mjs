@@ -45,6 +45,7 @@ const RE_LAYOUT = /(\d+房\d+廳)/;
 const RE_SIZE   = /(\d+(?:\.\d+)?)坪/;
 const RE_FLOOR  = /(B?\d+)F\/(\d+)F/;
 const RE_PRICE  = /([\d,]+)元/;
+const RE_DISTRICT = /(板橋區|中和區|三重區|中正區|大同區|中山區|松山區|大安區|萬華區|信義區|士林區|南港區)-?([^\s|]+)?/;
 
 function parseListing(raw) {
   const text = raw.full.replace(/\s+/g, ' ');
@@ -53,7 +54,9 @@ function parseListing(raw) {
   const sizeM = raw.tags.match(RE_SIZE);
   const floorM = raw.tags.match(RE_FLOOR);
   const priceM = raw.price.match(RE_PRICE);
-  const addr = (text.match(/板橋區-[^\s|]+/) || ['板橋區'])[0];
+  const distM = text.match(RE_DISTRICT);
+  const district = distM ? distM[1] : '未知區';
+  const addr = distM ? `${distM[1]}-${distM[2] || ''}`.replace(/-$/, '') : district;
   return {
     url: raw.link,
     title: raw.title.trim(),
@@ -65,6 +68,7 @@ function parseListing(raw) {
     floor: floorM ? floorM[1] : '',
     total_floor: floorM ? parseInt(floorM[2]) : null,
     address: addr,
+    district,
     full: text,
   };
 }
@@ -76,7 +80,7 @@ function titleFilter(l) {
   const reasons = [];
   const text = `${l.title} ${l.full}`;
   if (RE_PARKING_ONLY.test(l.title)) reasons.push('停車位');
-  if (l.price_num && l.price_num > 20000) reasons.push('price>20000');
+  if (l.price_num && l.price_num > 25000) reasons.push('price>25000');
   if (l.size != null && l.size < 8) reasons.push('size<8');
   if (l.type === '分租套房' || l.type === '雅房') reasons.push(`type=${l.type}`);
   if (/雅房|分租|合租/.test(text)) reasons.push('keyword:雅房/分租/合租');
@@ -91,19 +95,19 @@ function titleFilter(l) {
 
 const normalize = (s) => s.replace(/\s+/g, '').replace(/台/g, '臺').toLowerCase();
 
-async function main() {
-  const baseUrl = 'https://rent.591.com.tw/list?region=3&section=26&rentprice=0,20000&area=8,&kind=1,2&shape=2,4,6&order=posttime&orderType=desc';
+const SEARCH_URLS = [
+  { name: '台北市 9 區', url: 'https://rent.591.com.tw/list?region=1&section=1,2,3,4,5,6,7,8,11&rentprice=0,25000&area=8,&kind=1,2&shape=2,4,6&order=posttime&orderType=desc' },
+  { name: '新北市 3 區', url: 'https://rent.591.com.tw/list?region=3&section=26,38,43&rentprice=0,25000&area=8,&kind=1,2&shape=2,4,6&order=posttime&orderType=desc' },
+];
 
-  console.log(`[scan] opening base URL`);
+async function scanOneUrl(baseUrl, name, all, seen) {
+  console.log(`[scan] === ${name} ===`);
   run(`agent-browser open "${baseUrl}"`);
   run(`agent-browser wait 2500`);
 
-  const all = [];
-  const seen = new Set();
-
-  for (let page = 1; page <= 6; page++) {
+  for (let page = 1; page <= 10; page++) {
     const listings = extractOnPage();
-    if (!listings.length) { console.log(`[scan] page ${page}: empty, stop`); break; }
+    if (!listings.length) { console.log(`[scan] ${name} page ${page}: empty, stop`); break; }
     let fresh = 0;
     for (const raw of listings) {
       if (seen.has(raw.link)) continue;
@@ -111,11 +115,19 @@ async function main() {
       all.push(parseListing(raw));
       fresh++;
     }
-    console.log(`[scan] page ${page}: +${fresh} new (total ${all.length})`);
+    console.log(`[scan] ${name} page ${page}: +${fresh} new (total ${all.length})`);
     if (fresh === 0) break;
 
     run(`agent-browser open "${baseUrl}&firstRow=${page * 30}"`);
     run(`agent-browser wait 2500`);
+  }
+}
+
+async function main() {
+  const all = [];
+  const seen = new Set();
+  for (const s of SEARCH_URLS) {
+    await scanOneUrl(s.url, s.name, all, seen);
   }
 
   const qualified = [];
@@ -127,7 +139,7 @@ async function main() {
   }
 
   const pipeLines = qualified.map(l =>
-    `- [ ] ${l.url} | 591 | 板橋區 | 租 | ${l.price_raw} | ${l.size ?? '?'}坪 | ${l.type}${l.layout}`
+    `- [ ] ${l.url} | 591 | ${l.district} | 租 | ${l.price_raw} | ${l.size ?? '?'}坪 | ${l.type}${l.layout}`
   );
   if (pipeLines.length) appendFileSync(resolve(ROOT, 'data/pipeline.md'), pipeLines.join('\n') + '\n');
 
@@ -147,13 +159,20 @@ async function main() {
   console.log(`標題不符: ${skipped.length}`);
   console.log(`新增至 pipeline.md: ${qualified.length}`);
   console.log(`完整 dump: ${DUMP}\n`);
-  for (const l of qualified.slice(0, 30)) {
+  const byDist = {};
+  for (const l of qualified) (byDist[l.district] = byDist[l.district] || []).push(l);
+  console.log('\n各區分佈：');
+  for (const [d, ls] of Object.entries(byDist).sort((a, b) => b[1].length - a[1].length)) {
+    console.log(`  ${d}: ${ls.length} 筆`);
+  }
+  console.log('\n合格物件（前 40）：');
+  for (const l of qualified.slice(0, 40)) {
     const p = (l.price_raw || '').padEnd(14);
     const s = String(l.size ?? '?').padStart(4);
     const f = `${l.floor}F/${l.total_floor}F`.padEnd(8);
-    console.log(`  + ${p} ${s}坪 ${f} ${l.type}${(l.layout||'').padEnd(8)} ${l.title.slice(0, 36)}`);
+    console.log(`  + [${l.district}] ${p} ${s}坪 ${f} ${l.type}${(l.layout||'').padEnd(8)} ${l.title.slice(0, 30)}`);
   }
-  if (qualified.length > 30) console.log(`  ...(+${qualified.length - 30} more)`);
+  if (qualified.length > 40) console.log(`  ...(+${qualified.length - 40} more)`);
 
   if (skipped.length) {
     const counts = {};

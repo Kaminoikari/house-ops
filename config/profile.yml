@@ -10,7 +10,7 @@ search:
   buyer_type: renter
 
 budget:
-  rent_max: 20000
+  rent_max: 25000
   buy_max: null
   monthly_payment_max: null
 
@@ -38,8 +38,10 @@ property:
   pet: false
 
 regions:
+  - city: "台北市"
+    districts: ["中正區", "大同區", "中山區", "松山區", "大安區", "萬華區", "信義區", "士林區", "南港區"]
   - city: "新北市"
-    districts: ["板橋區"]
+    districts: ["板橋區", "中和區", "三重區"]
 
 lifestyle:
   mrt_walk_max: 15
@@ -64,4 +66,4 @@ narrative:
   nice_to_have:
     - "南北採光"
     - "社區管理"
-  notes: "板橋區租屋測試跑，月租上限 2 萬，必須為獨立整間（非雅房/分租/合租），必要設備：陽台、獨立廁所、廚房、客廳。"
+  notes: "台北市 9 區 + 新北市 3 區（板橋/中和/三重），月租上限 2.5 萬，必須為獨立整間（非雅房/分租/合租/公寓），必要設備：陽台、獨立廁所、廚房、客廳。"
