@@ -1,0 +1,341 @@
+// render-daily-html.mjs — produce self-contained HTML daily report from structured data.
+// Mirrors the design of reports/daily/2026-04-21.html (hand-authored reference).
+
+const DIST_FROM_ADDR = (a) => (a.match(/(板橋區|中和區|三重區|中正區|大同區|中山區|松山區|大安區|萬華區|信義區|士林區|南港區|內湖區|北投區|文山區)/) || [null])[0] || '?';
+
+const parseRentNum = (raw) => {
+  const m = String(raw || '').match(/([\d,]+)/);
+  return m ? parseInt(m[1].replace(/,/g, ''), 10) : 0;
+};
+
+const safeJson = (x) => JSON.stringify(x).replace(/</g, '\\u003c').replace(/-->/g, '--\\u003e');
+
+export function renderDailyHtml(scan, data, today) {
+  const listings = data.reportsData.map(r => ({
+    score: r.score,
+    district: DIST_FROM_ADDR(r.address),
+    rent: r.rent,
+    size: r.size,
+    layout: r.rooms != null ? `${r.rooms}房${r.halls}廳${r.baths ?? '?'}衛` : '—',
+    report: `../${r.file.replace(/\.md$/, '.html')}`,
+    s591: r.url ? r.url.split('/').pop() : '',
+    alert: r.hasDealBreaker ? '⚠️' : '',
+  }));
+
+  const priceChanges = (scan.priceChanged || []).map(p => {
+    const delta = p.price_num - p.prev_price;
+    const pct = Math.round(delta / p.prev_price * 1000) / 10;
+    return {
+      dir: delta < 0 ? 'down' : 'up',
+      district: p.district,
+      from: p.prev_price,
+      to: p.price_num,
+      delta,
+      pct,
+      title: p.title,
+      s591: p.url ? p.url.split('/').pop() : '',
+    };
+  });
+
+  const districts = Object.entries(data.byDistrict)
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, count]) => ({ name, count }));
+
+  const allDelisted = (scan.expired || []).map(e => ({
+    id: e.url ? e.url.split('/').pop() : '',
+    location: e.address || '',
+    rent: parseRentNum(e.price_raw),
+  }));
+  const DELISTED_CAP = 30;
+  const delisted = allDelisted.slice(0, DELISTED_CAP);
+  const delistedExtra = Math.max(0, allDelisted.length - DELISTED_CAP);
+
+  const summary = {
+    totalFound: scan.totalFound,
+    qualified: scan.qualified?.length ?? 0,
+    newItems: scan.newItems?.length ?? 0,
+    refreshed: scan.refreshed?.length ?? 0,
+    priceChanged: scan.priceChanged?.length ?? 0,
+    expired: scan.expired?.length ?? 0,
+  };
+
+  const generatedAt = new Date().toISOString();
+
+  return `<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>每日推薦 · ${today}</title>
+<style>${CSS}</style>
+</head>
+<body>
+<div class="container">
+
+<header>
+  <h1>每日推薦 · ${today}</h1>
+  <div class="subtitle">每日自動掃描 · 資料來源 591.com.tw · 掃描 ${scan.searchUrls ?? '?'} 組 URL</div>
+</header>
+
+<section class="stats">
+  <div class="stat"><div class="label">物件找到</div><div class="value">${summary.totalFound}</div></div>
+  <div class="stat"><div class="label">快篩通過</div><div class="value">${summary.qualified}</div></div>
+  <div class="stat highlight"><div class="label">今日新物件</div><div class="value">${summary.newItems}</div></div>
+  <div class="stat"><div class="label">既有仍在架</div><div class="value">${summary.refreshed}</div></div>
+  <div class="stat"><div class="label">價格變動</div><div class="value">${summary.priceChanged}</div></div>
+  <div class="stat"><div class="label">已下架</div><div class="value">${summary.expired}</div></div>
+</section>
+
+<h2>🆕 今日新物件 <span class="count">（${listings.length} 筆已評估 · 點欄位標題排序）</span></h2>
+
+${listings.length ? `<div class="controls">
+  <label>區域
+    <select id="filterDistrict"><option value="">全部</option></select>
+  </label>
+  <label>最低分數
+    <select id="filterScore">
+      <option value="0">全部</option>
+      <option value="4.0">4.0 以上</option>
+      <option value="3.5">3.5 以上</option>
+      <option value="3.0">3.0 以上</option>
+    </select>
+  </label>
+  <label>月租上限
+    <select id="filterRent">
+      <option value="99999">不限</option>
+      <option value="20000">≤ 20,000</option>
+      <option value="22000">≤ 22,000</option>
+      <option value="24000">≤ 24,000</option>
+    </select>
+  </label>
+  <span class="result-count" id="resultCount"></span>
+</div>
+
+<div class="table-wrap">
+<table id="listings">
+<thead>
+<tr>
+  <th data-sort="score" class="sort-desc">分數</th>
+  <th data-sort="district">區</th>
+  <th data-sort="rent">月租</th>
+  <th data-sort="size">坪數</th>
+  <th class="layout-col">格局</th>
+  <th>⚠️</th>
+  <th>連結</th>
+</tr>
+</thead>
+<tbody id="tbody"></tbody>
+</table>
+</div>` : `<p style="color:var(--muted);padding:20px;background:var(--panel);border:1px solid var(--border);border-radius:10px;">今日無新物件</p>`}
+
+${priceChanges.length ? `<h2>💰 價格變動警示 <span class="count">（${priceChanges.length} 筆）</span></h2>
+<div class="price-list" id="priceList"></div>` : ''}
+
+${districts.length ? `<h2>📊 各區新增</h2>
+<div class="districts-grid" id="districtsGrid"></div>` : ''}
+
+${allDelisted.length ? `<h2>💀 已下架 <span class="count">（${summary.expired} 筆）</span></h2>
+<details>
+  <summary>展開清單</summary>
+  <ul class="delisted-list" id="delistedList"></ul>
+</details>` : ''}
+
+<footer>
+  Generated by <code>scripts/run-daily.mjs</code> at ${generatedAt} ·
+  原始 markdown：<a href="${today}.md" class="btn">${today}.md</a>
+</footer>
+
+</div>
+
+<script>
+const LISTINGS = ${safeJson(listings)};
+const PRICE_CHANGES = ${safeJson(priceChanges)};
+const DISTRICTS = ${safeJson(districts)};
+const DELISTED = ${safeJson(delisted)};
+const DELISTED_EXTRA = ${delistedExtra};
+${CLIENT_JS}
+</script>
+</body>
+</html>
+`;
+}
+
+const CSS = `
+:root {
+  --bg:#fafaf7;--panel:#fff;--ink:#1a1a1a;--muted:#6b7280;--border:#e5e7eb;
+  --hover:#f3f4f6;--green:#16a34a;--green-bg:#dcfce7;--yellow:#ca8a04;
+  --yellow-bg:#fef3c7;--red:#dc2626;--red-bg:#fee2e2;--blue:#2563eb;--accent:#0f172a;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC","Helvetica Neue",sans-serif;font-size:15px;line-height:1.55;color:var(--ink);background:var(--bg);margin:0;padding:32px 20px 80px}
+.container{max-width:1100px;margin:0 auto}
+header{margin-bottom:28px}
+h1{font-size:28px;font-weight:700;margin:0 0 6px;letter-spacing:-0.01em}
+.subtitle{color:var(--muted);font-size:14px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:24px 0 32px}
+.stat{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px 16px}
+.stat .label{font-size:12px;color:var(--muted);letter-spacing:0.02em}
+.stat .value{font-size:24px;font-weight:700;margin-top:4px}
+.stat.highlight{background:#eff6ff;border-color:#bfdbfe}
+.stat.highlight .value{color:var(--blue)}
+h2{font-size:18px;font-weight:600;margin:36px 0 14px;display:flex;align-items:center;gap:8px}
+h2 .count{font-size:13px;color:var(--muted);font-weight:400}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:10px;padding:10px 12px;background:var(--panel);border:1px solid var(--border);border-radius:10px}
+.controls label{font-size:13px;color:var(--muted);display:inline-flex;align-items:center;gap:6px}
+.controls select,.controls input{font-size:13px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:#fff;font-family:inherit}
+.controls .result-count{margin-left:auto;font-size:13px;color:var(--muted)}
+.table-wrap{background:var(--panel);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+table{width:100%;border-collapse:collapse;font-size:14px}
+thead th{background:#f9fafb;text-align:left;padding:10px 12px;font-weight:600;font-size:12px;color:var(--muted);letter-spacing:0.03em;border-bottom:1px solid var(--border);cursor:pointer;user-select:none;white-space:nowrap}
+thead th:hover{background:#f3f4f6}
+thead th[data-sort]::after{content:" ↕";opacity:.3;font-size:10px}
+thead th.sort-asc::after{content:" ↑";opacity:1;color:var(--ink)}
+thead th.sort-desc::after{content:" ↓";opacity:1;color:var(--ink)}
+tbody tr{border-bottom:1px solid var(--border);transition:background .1s}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:var(--hover)}
+tbody td{padding:10px 12px;vertical-align:middle}
+.score{display:inline-block;padding:2px 8px;border-radius:6px;font-weight:600;font-size:13px;font-variant-numeric:tabular-nums;min-width:38px;text-align:center}
+.score-4{background:var(--green-bg);color:var(--green)}
+.score-3p5{background:var(--yellow-bg);color:var(--yellow)}
+.score-3{background:var(--red-bg);color:var(--red)}
+td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+.district{display:inline-block;padding:1px 7px;border-radius:4px;background:#e0e7ff;color:#3730a3;font-size:12px;font-weight:500}
+.links{display:flex;gap:6px}
+.btn{display:inline-block;padding:3px 8px;font-size:12px;border:1px solid var(--border);border-radius:5px;color:var(--ink);text-decoration:none;background:#fff;transition:all .1s;white-space:nowrap}
+.btn:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn.primary{background:var(--blue);color:#fff;border-color:var(--blue)}
+.btn.primary:hover{background:#1d4ed8}
+.price-list{display:grid;gap:8px}
+.price-item{background:var(--panel);border:1px solid var(--border);border-left:3px solid var(--muted);border-radius:8px;padding:10px 14px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:14px}
+.price-item.down{border-left-color:var(--green)}
+.price-item.up{border-left-color:var(--red)}
+.price-delta{font-variant-numeric:tabular-nums;font-weight:600}
+.price-delta.down{color:var(--green)}
+.price-delta.up{color:var(--red)}
+.price-item .title{flex:1;color:var(--muted);font-size:13px}
+.districts-grid{display:grid;gap:6px;max-width:520px}
+.district-row{display:grid;grid-template-columns:70px 1fr 40px;align-items:center;gap:10px;font-size:13px}
+.district-row .bar{height:14px;background:linear-gradient(90deg,var(--blue),#60a5fa);border-radius:3px;min-width:4px}
+.district-row .cnt{color:var(--muted);font-variant-numeric:tabular-nums;text-align:right}
+details{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 14px}
+details summary{cursor:pointer;font-weight:500;list-style:none;color:var(--muted);font-size:14px}
+details summary::-webkit-details-marker{display:none}
+details summary::before{content:"▸ ";display:inline-block;transition:transform .15s}
+details[open] summary::before{transform:rotate(90deg)}
+details[open] summary{margin-bottom:10px;color:var(--ink)}
+.delisted-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:4px 16px;margin:0;padding:0;list-style:none;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--border);font-size:12px;color:var(--muted);text-align:center}
+footer code{font-family:"SF Mono",Menlo,monospace;font-size:11px;background:var(--panel);padding:1px 5px;border-radius:3px}
+@media (max-width:640px){
+  body{padding:20px 12px 60px}
+  h1{font-size:22px}
+  .stat .value{font-size:20px}
+  thead th,tbody td{padding:8px 6px;font-size:13px}
+  .layout-col{display:none}
+}
+`;
+
+const CLIENT_JS = `
+const scoreClass = s => s == null ? "" : s >= 4.0 ? "score-4" : s >= 3.5 ? "score-3p5" : "score-3";
+const fmt = n => (n ?? 0).toLocaleString("en-US");
+let currentSort = { key: "score", dir: "desc" };
+
+function renderListings() {
+  if (!document.getElementById("tbody")) return;
+  const fd = document.getElementById("filterDistrict").value;
+  const fs = parseFloat(document.getElementById("filterScore").value);
+  const fr = parseInt(document.getElementById("filterRent").value, 10);
+  let rows = LISTINGS.filter(x =>
+    (!fd || x.district === fd) && (x.score ?? 0) >= fs && (x.rent ?? 0) <= fr
+  );
+  rows.sort((a, b) => {
+    const k = currentSort.key, d = currentSort.dir === "asc" ? 1 : -1;
+    const av = a[k], bv = b[k];
+    if (typeof av === "number" || typeof bv === "number") return ((av ?? 0) - (bv ?? 0)) * d;
+    return String(av ?? "").localeCompare(String(bv ?? ""), "zh-Hant") * d;
+  });
+  const tbody = document.getElementById("tbody");
+  tbody.innerHTML = rows.map(x => \`
+    <tr>
+      <td><span class="score \${scoreClass(x.score)}">\${(x.score ?? 0).toFixed(1)}</span></td>
+      <td><span class="district">\${x.district}</span></td>
+      <td class="num">\${fmt(x.rent)}</td>
+      <td class="num">\${x.size ?? "?"}</td>
+      <td class="layout-col">\${x.layout}</td>
+      <td>\${x.alert}</td>
+      <td><div class="links">
+        <a class="btn primary" href="https://rent.591.com.tw/\${x.s591}" target="_blank" rel="noopener">591 ↗</a>
+        <a class="btn" href="\${x.report}" target="_blank">報告</a>
+      </div></td>
+    </tr>\`).join("");
+  document.getElementById("resultCount").textContent = \`顯示 \${rows.length} / \${LISTINGS.length} 筆\`;
+}
+
+function renderPrice() {
+  const el = document.getElementById("priceList");
+  if (!el) return;
+  el.innerHTML = PRICE_CHANGES.map(p => \`
+    <div class="price-item \${p.dir}">
+      <span class="district">\${p.district}</span>
+      <span class="num">\${fmt(p.from)} → <b>\${fmt(p.to)}</b></span>
+      <span class="price-delta \${p.dir}">\${p.delta > 0 ? "+" : ""}\${fmt(p.delta)} (\${p.pct > 0 ? "+" : ""}\${p.pct}%)</span>
+      <span class="title">\${p.title}</span>
+      <a class="btn primary" href="https://rent.591.com.tw/\${p.s591}" target="_blank" rel="noopener">591 ↗</a>
+    </div>\`).join("");
+}
+
+function renderDistricts() {
+  const el = document.getElementById("districtsGrid");
+  if (!el) return;
+  const max = Math.max(1, ...DISTRICTS.map(d => d.count));
+  el.innerHTML = DISTRICTS.map(d => \`
+    <div class="district-row">
+      <div><span class="district">\${d.name}</span></div>
+      <div class="bar" style="width: \${(d.count / max * 100).toFixed(0)}%"></div>
+      <div class="cnt">\${d.count}</div>
+    </div>\`).join("");
+}
+
+function renderDelisted() {
+  const el = document.getElementById("delistedList");
+  if (!el) return;
+  el.innerHTML = DELISTED.map(d => \`
+    <li><a href="https://rent.591.com.tw/\${d.id}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none;">\${d.id}</a> · \${d.location} · \${fmt(d.rent)}</li>\`
+  ).join("") + (DELISTED_EXTRA > 0
+    ? \`<li style="color:var(--muted);grid-column:1 / -1;margin-top:8px;font-style:italic;">...（+\${DELISTED_EXTRA} 筆完整清單於 data/scan-history.tsv）</li>\`
+    : "");
+}
+
+if (document.getElementById("tbody")) {
+  const districtSel = document.getElementById("filterDistrict");
+  [...new Set(LISTINGS.map(x => x.district))].sort().forEach(d => {
+    const o = document.createElement("option");
+    o.value = o.textContent = d;
+    districtSel.appendChild(o);
+  });
+  document.querySelectorAll("thead th[data-sort]").forEach(th => {
+    th.addEventListener("click", () => {
+      const key = th.dataset.sort;
+      if (currentSort.key === key) {
+        currentSort.dir = currentSort.dir === "asc" ? "desc" : "asc";
+      } else {
+        currentSort.key = key;
+        currentSort.dir = (typeof LISTINGS[0]?.[key] === "number") ? "desc" : "asc";
+      }
+      document.querySelectorAll("thead th").forEach(x => x.classList.remove("sort-asc", "sort-desc"));
+      th.classList.add("sort-" + currentSort.dir);
+      renderListings();
+    });
+  });
+  ["filterDistrict", "filterScore", "filterRent"].forEach(id =>
+    document.getElementById(id).addEventListener("change", renderListings)
+  );
+  renderListings();
+}
+
+renderPrice();
+renderDistricts();
+renderDelisted();
+`;

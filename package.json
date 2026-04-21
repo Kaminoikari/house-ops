@@ -10,6 +10,7 @@
     "dedup": "node dedup-tracker.mjs"
   },
   "dependencies": {
+    "marked": "^18.0.2",
     "yaml": "^2.8.3"
   }
 }

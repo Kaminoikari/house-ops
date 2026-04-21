@@ -9,6 +9,7 @@ import { execSync } from 'node:child_process';
 import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { renderReportHtml } from './render-report-html.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const TODAY = new Date().toISOString().slice(0, 10);
@@ -257,6 +258,8 @@ _此報告由 eval-591.mjs 自動產生，需搭配實地看屋驗證。_
 `;
 
   writeFileSync(fpath, body);
+  const htmlPath = fpath.replace(/\.md$/, '.html');
+  writeFileSync(htmlPath, renderReportHtml(body));
   return fname;
 }
 

@@ -95,16 +95,22 @@ agent-browser --version
 ```bash
 # 日常
 node scripts/scan-591.mjs         # 爬蟲：依 profile.yml 條件掃 591
-node scripts/eval-591.mjs --from-pipeline 10   # 評估 pipeline 前 10 筆
+node scripts/eval-591.mjs --from-pipeline 10   # 評估 pipeline 前 10 筆（同步產 .md + .html）
 node scripts/rank-listings.mjs --rewrite       # Phase 1.5 排序重寫 pipeline.md
-node scripts/run-daily.mjs        # 🌅 一鍵跑：scan → eval 今日新 → 寫日報
+node scripts/run-daily.mjs        # 🌅 一鍵跑：scan → eval 今日新 → 寫日報 (md + html)
 
 # 維護
+node scripts/convert-reports-html.mjs  # 批次將 reports/*.md 轉成 .html（個別物件報告）
 node merge-tracker.mjs           # 合併待新增 TSV 至 tracker.md
 node verify-pipeline.mjs         # 檢查 pipeline 完整性
 node dedup-tracker.mjs           # 移除重複追蹤條目
 node --test tests/**/*.test.mjs  # 執行所有測試
 ```
+
+報告檔案類型：
+- `reports/NNN-*.md` — 個別物件評估報告（canonical 原始檔，git 追蹤）
+- `reports/NNN-*.html` — 對應的美化檢視頁面（.md 自動渲染，gitignore）
+- `reports/daily/YYYY-MM-DD.md` + `.html` — 每日彙總，html 支援排序 / 篩選
 
 ---
 
@@ -149,6 +155,16 @@ sudo pmset repeat wakeorpoweron MTWRF 08:55:00
 launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.house-ops.daily.plist
 rm ~/Library/LaunchAgents/com.house-ops.daily.plist
 ```
+
+### 重新渲染今日報告（不動 scan）
+
+當日想調整日報外觀或 template，不希望重新爬 591（會觸發 dedup 把「新物件」歸零覆蓋掉原始日報）：
+
+```bash
+node scripts/run-daily.mjs --dry-run
+```
+
+用 `data/last-scan.json`（前一次真跑的快取）+ 現有 `reports/NNN-*-YYYY-MM-DD.md` 個別報告重建 `reports/daily/YYYY-MM-DD.{md,html}`，不觸發 scan、不改 `scan-history.tsv`、不產新的個別報告。第一次使用前必須先有一次真跑以產生快取。
 
 ---
 
