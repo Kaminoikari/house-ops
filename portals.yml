@@ -20,21 +20,6 @@ tracked_portals:
     enabled: false
     url_template: "https://sale.591.com.tw/?region={region_code}&price=0,{buy_max}&area={size_min},"
 
-  - name: "樂屋網 租屋"
-    type: rent
-    enabled: false
-    base_url: "https://www.rakuya.com.tw/rent/search"
-
-  - name: "信義房屋"
-    type: buy
-    enabled: false
-    base_url: "https://www.sinyi.com.tw/buy/list"
-
-  - name: "永慶房屋"
-    type: buy
-    enabled: false
-    base_url: "https://www.yungching.com.tw/buy"
-
 market_reference:
   lvr_api:
     enabled: true

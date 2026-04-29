@@ -15,12 +15,12 @@ Full evaluation of a rental listing. Two phases:
 ## Section 1: Input Handling
 
 ### URL input (most common)
-1. `browser_navigate` to the URL
-2. `browser_snapshot` to read the page
+1. `agent-browser open <url>` to navigate
+2. `agent-browser snapshot -i` to read the page
 3. **Verify listing is active:**
    - Active: listing title + description + price + contact/apply section all present
    - Inactive: only nav and footer visible, no listing content → output "此物件已下架或不再提供。" and stop
-4. **NEVER** use WebSearch or WebFetch alone to verify listing status. Always use Playwright.
+4. **NEVER** use WebSearch or WebFetch alone to verify listing status. Always use `agent-browser`.
 
 ### Pasted text input
 Proceed directly to Phase 1 using the provided content.

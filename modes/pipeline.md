@@ -71,7 +71,7 @@ Check `modes/_profile.md` deal_breakers against the title/address fields.
 - Write the full report to `reports/`
 - Write TSV to `batch/tracker-additions/`
 
-**Note on verification:** In batch mode, set `**Verification:** unconfirmed (batch mode)` in the report header because Playwright liveness checks are not always reliable for queued entries that may have aged.
+**Note on verification:** In batch mode, set `**Verification:** unconfirmed (batch mode)` in the report header because `agent-browser` liveness checks are not always reliable for queued entries that may have aged.
 
 ### 2d: Mark entry as done
 

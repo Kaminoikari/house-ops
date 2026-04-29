@@ -87,12 +87,11 @@ Final score = weighted average of 5 dimension scores × 5.
 - `{road-slug}`: pinyin approximation, hyphenated; if ambiguous → `road-{4-char-hex}`
 - `{YYYY-MM-DD}`: evaluation date
 
-**Listing liveness verification:** ALWAYS use Playwright (`browser_navigate` + `browser_snapshot`). NEVER use WebSearch or WebFetch alone to determine if a listing is active. Expired signals: `error=true` URL param, "物件已下架"/"no longer available" in content, content < 300 chars with only nav/footer.
+**Listing liveness verification:** ALWAYS use `agent-browser` (`agent-browser open` + `agent-browser snapshot -i`). NEVER use WebSearch or WebFetch alone to determine if a listing is active. Expired signals: `error=true` URL param, "物件已下架"/"no longer available" in content, content < 300 chars with only nav/footer.
 
 **Platform access methods:**
-- 591, 樂屋網: SPA → Playwright required
-- 信義, 永慶, 東森, 住商: SPA → Playwright required
-- 實價登錄 (lvr.land.moi.gov.tw): Government REST API → reference data only, never populates pipeline
+- 591 (rent + sale): SPA → `agent-browser` required
+- 實價登錄 (lvr.land.moi.gov.tw): Government REST API → reference data only; never populates pipeline
 
 ---
 

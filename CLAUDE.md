@@ -2,7 +2,7 @@
 
 ## What is house-ops
 
-house-ops is an AI-powered real estate search pipeline built on Claude Code, designed for house hunters in Taiwan. It automates listing discovery, evaluation, and tracking across the full search lifecycle — from scanning portals like 591, 樂屋網, and 信義房屋, through structured evaluation against your budget and lifestyle criteria, to managing a tracker of every property you've considered. It supports three buyer personas (renter, first-time buyer, upgrader), handles both rental and purchase markets, and produces structured reports so you can make informed decisions without drowning in listings.
+house-ops is an AI-powered real estate search pipeline built on Claude Code, designed for house hunters in Taiwan. It automates listing discovery, evaluation, and tracking across the full search lifecycle — from scanning 591, through structured evaluation against your budget and lifestyle criteria, to managing a tracker of every property you've considered. It supports three buyer personas (renter, first-time buyer, upgrader), handles both rental and purchase markets, and produces structured reports so you can make informed decisions without drowning in listings.
 
 ---
 

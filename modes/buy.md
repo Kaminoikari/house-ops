@@ -17,10 +17,10 @@ Buy mode extends rent mode with loan calculations, 實價登錄 sale prices, and
 ## Section 1: Input Handling
 
 ### URL input
-1. `browser_navigate` to the URL
-2. `browser_snapshot`
+1. `agent-browser open <url>`
+2. `agent-browser snapshot -i`
 3. **Verify active:** listing title + price + contact section present. If only nav/footer → "此物件已下架或不再提供。" and stop.
-4. **NEVER** use WebSearch or WebFetch alone for liveness checks.
+4. **NEVER** use WebSearch or WebFetch alone for liveness checks. Always use `agent-browser`.
 
 ### Pasted text
 Proceed directly to Phase 1 using the provided content.

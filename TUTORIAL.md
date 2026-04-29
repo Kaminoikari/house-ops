@@ -23,7 +23,7 @@ flowchart TD
     Type -->|🔑 首購族| FB_Afford[affordability\n財務試算]
     Type -->|🔄 換屋族| UG_Switch[upgrade plan\n換屋財務規劃]
 
-    FB_Afford --> R_Scan[scan\n掃描平台物件]
+    FB_Afford --> R_Scan[scan\n掃描 591 物件]
     UG_Switch --> R_Scan
 
     R_Scan --> Pipeline[pipeline 批次評估\n或貼 URL 直接評估]
@@ -61,7 +61,7 @@ Claude 會依序問你問題（約 5 分鐘），完成後生成：
 - `config/profile.yml` — 個人設定（永遠不會被系統更新覆寫）
 - `data/tracker.md` — 物件追蹤表
 - `data/pipeline.md` — 待評估 URL 收件匣
-- `portals.yml` — 各平台掃描設定
+- `portals.yml` — 591 掃描設定
 
 ---
 
@@ -71,7 +71,7 @@ Claude 會依序問你問題（約 5 分鐘），完成後生成：
 
 ```mermaid
 flowchart TD
-    Input([URL 輸入 或 pipeline 批次]) --> Live{"Playwright 確認\n物件仍上架？"}
+    Input([URL 輸入 或 pipeline 批次]) --> Live{"agent-browser 確認\n物件仍上架？"}
     Live -->|已下架| Dead(["輸出：此物件已下架，停止評估"])
     Live -->|仍在刊登| P1["第一階段：快篩"]
 
@@ -109,7 +109,7 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    OB([初始設定]) --> Scan["scan\n掃描 591·樂屋等平台"]
+    OB([初始設定]) --> Scan["scan\n掃描 591"]
     Scan --> Pipeline["pipeline\n批次評估 or 貼 URL"]
     Pipeline --> Eval["rent.md\n行情比較·通勤·五維度評分"]
     Eval --> Report["reports/ 報告\n+ 追蹤表更新"]
@@ -144,19 +144,19 @@ flowchart LR
 你：scan
 ```
 
-Claude 啟動背景 agent，透過 Playwright 瀏覽 591、樂屋等平台，套用區域和預算條件，去除重複物件後輸出：
+Claude 啟動背景 agent，透過 agent-browser 瀏覽 591，套用區域和預算條件，去除重複物件後輸出：
 
 ```
 平台掃描結果 — 2026-04-08
 ━━━━━━━━━━━━━━━━━━━━━━━━
-平台掃描: 4
+平台掃描: 1
 物件找到: 47 筆
 快篩通過: 12 筆
 重複略過: 8 筆
 標題不符: 27 筆
 新增至 pipeline.md: 12 筆
   + 信義區 | 591 | 23,000/月 | 18坪 | 2房1衛
-  + 大安區 | 樂屋 | 22,500/月 | 16坪 | 2房1廳1衛
+  + 大安區 | 591 | 22,500/月 | 16坪 | 2房1廳1衛
   ...
 ```
 
@@ -421,7 +421,7 @@ stateDiagram-v2
 
 | 指令 | 說明 |
 |------|------|
-| `scan` | 掃描所有平台，新物件加入 pipeline |
+| `scan` | 掃描 591，新物件加入 pipeline |
 | `pipeline` | 批次評估 pipeline 中所有待處理物件 |
 | `{URL}` | 直接評估單一物件 |
 | `compare 001, 003` | 比較指定報告 |

@@ -8,11 +8,27 @@
 
 ## 功能概覽
 
-- **掃描** 591、樂屋網、信義、永慶、東森、住商，搜尋符合條件的新物件
-- **評估** 每間物件：與市場行情（實價登錄）比較、通勤計算、五維度評分
-- **追蹤** 所有考慮過的物件，以結構化 Markdown 表格記錄
-- **試算** 可負擔房價（首購族）與換屋財務規劃（換屋族）
-- **準備** 根據評估報告產生看屋清單與議價策略
+### 自動化（腳本層，可獨立執行）
+
+- **掃描 591** 上架物件並依 `config/profile.yml` 條件初篩（`scan-591.mjs`）
+- **評估** 從 591 頁面擷取資料後，以五維度啟發式評分（`eval-591.mjs`）：
+  - 價格合理性（依單坪租金門檻判斷）
+  - 空間與格局（坪數 + 房廳數）
+  - 區域生活機能（頁面文字含「捷運」「學區」「市場」等關鍵字加分）
+  - 物件條件（電梯、陽台、總樓層、裝潢字樣）
+  - 風險與潛力（社宅、deal-breaker 命中、建物類型）
+- **追蹤** `data/tracker.md` 結構化表格，搭配 `merge-tracker.mjs` / `dedup-tracker.mjs` / `verify-pipeline.mjs`
+- **每日排程** launchd 觸發 `run-daily.mjs`：scan + eval + 寫日報 (md + html) + email 通知
+
+### 互動式 Mode（Claude Code 會話中觸發）
+
+下列 mode 為 Claude prompt 設計，需在 Claude Code 會話中以指令呼叫；非自動化腳本：
+
+- **可負擔房價試算** — `affordability`（`modes/afford.md`，首購族）
+- **換屋財務規劃** — `upgrade plan`（`modes/switch.md`，換屋族）
+- **看屋清單與議價策略** — `prepare visit for {###}`（`modes/visit.md`）
+- **物件比較** — `compare 001, 003`（`modes/compare.md`）
+- **批次處理 pipeline** — `pipeline`（`modes/pipeline.md`）
 
 ---
 
@@ -48,7 +64,7 @@ agent-browser --version
 | 輸入 | 動作 |
 |------|------|
 | 貼上物件 URL | 自動判斷租屋 / 買屋 → 評估 → 產生報告 |
-| `scan` | 在目標區域掃描各平台的新物件 |
+| `scan` | 在目標區域掃描 591 的新物件 |
 | `pipeline` | 批次處理 `data/pipeline.md` 中所有待評估 URL |
 | `compare 001, 003` | 並列比較兩間已評估物件 |
 | `prepare visit for 001` | 產生報告 001 的看屋清單與議價策略 |
@@ -97,7 +113,7 @@ agent-browser --version
 node scripts/scan-591.mjs         # 爬蟲：依 profile.yml 條件掃 591
 node scripts/eval-591.mjs --from-pipeline 10   # 評估 pipeline 前 10 筆（同步產 .md + .html）
 node scripts/rank-listings.mjs --rewrite       # Phase 1.5 排序重寫 pipeline.md
-node scripts/run-daily.mjs        # 🌅 一鍵跑：scan → eval 今日新 → 寫日報 (md + html)
+node scripts/run-daily.mjs        # 🌅 一鍵跑：scan → eval 今日新 → 寫日報 (md + html) → 寄 email
 
 # 維護
 node scripts/convert-reports-html.mjs  # 批次將 reports/*.md 轉成 .html（個別物件報告）
@@ -149,22 +165,40 @@ launchd 只在 Mac 醒著時觸發。若你的 Mac 夜間熟睡，可設定自�
 sudo pmset repeat wakeorpoweron MTWRF 08:55:00
 ```
 
+### Email 通知（選用）
+
+跑完 daily 之後可自動把日報寄到信箱，避免漏看。本機透過 Gmail SMTP（nodemailer）寄送，需要 Gmail App Password。
+
+設定步驟詳見 [`docs/email-setup.md`](docs/email-setup.md)，重點：
+
+1. 到 <https://myaccount.google.com/apppasswords> 產一組 16 字元 App Password
+2. 在 `~/Library/LaunchAgents/com.house-ops.daily.plist` 的 `EnvironmentVariables` 區塊加入 `GMAIL_USER`、`GMAIL_APP_PASSWORD`、`NOTIFY_EMAIL_TO`
+3. `launchctl unload && launchctl load` 重載
+4. 馬上測試：`node scripts/run-daily.mjs --email-only`
+
+未設定環境變數時 daily run 仍正常完成，只是跳過寄信並顯示 `⚠ Email 跳過：缺少環境變數`。
+
+寄出信件內容包含：今日新物件表格（分數 / 行政區 / 月租 / 坪數 / 格局 / 警示 / 591 連結）、價格變動、已下架條目、各區統計。詳細個別報告請至本機 `reports/` 目錄查看。
+
+### CLI Flags
+
+`scripts/run-daily.mjs` 支援以下 flag：
+
+| Flag | 行為 |
+|---|---|
+| (預設) | 完整 scan + eval + 渲染 + 寄信 |
+| `--dry-run` | 只重新渲染今日日報，不 scan、不寄信 |
+| `--email-only` | 重新渲染今日日報並寄信，不 scan |
+| `--no-email` | 完整 scan + eval + 渲染，但不寄信 |
+
+`--dry-run` 與 `--email-only` 用 `data/last-scan.json`（前一次真跑的快取）+ 現有 `reports/NNN-*-YYYY-MM-DD.md` 重建 `reports/daily/YYYY-MM-DD.{md,html}`，不觸發 scan、不改 `scan-history.tsv`、不產新的個別報告。第一次使用前必須先有一次真跑以產生快取。
+
 ### 解除安裝
 
 ```bash
 launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.house-ops.daily.plist
 rm ~/Library/LaunchAgents/com.house-ops.daily.plist
 ```
-
-### 重新渲染今日報告（不動 scan）
-
-當日想調整日報外觀或 template，不希望重新爬 591（會觸發 dedup 把「新物件」歸零覆蓋掉原始日報）：
-
-```bash
-node scripts/run-daily.mjs --dry-run
-```
-
-用 `data/last-scan.json`（前一次真跑的快取）+ 現有 `reports/NNN-*-YYYY-MM-DD.md` 個別報告重建 `reports/daily/YYYY-MM-DD.{md,html}`，不觸發 scan、不改 `scan-history.tsv`、不產新的個別報告。第一次使用前必須先有一次真跑以產生快取。
 
 ---
 
