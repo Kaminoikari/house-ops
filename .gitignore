@@ -9,6 +9,7 @@ data/scan-history.tsv
 data/logs/
 data/last-scan.json
 data/top3-per-district.txt
+launchd/com.house-ops.daily.plist
 batch/tracker-additions/*.tsv
 reports/daily/*.md
 reports/daily/*.html

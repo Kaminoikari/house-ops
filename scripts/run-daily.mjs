@@ -14,6 +14,7 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { renderDailyHtml } from './render-daily-html.mjs';
+import { sendDailyEmail } from '../lib/notify-email.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const TODAY = new Date().toISOString().slice(0, 10);
@@ -124,7 +125,9 @@ function writeDailyReport(scan, data) {
   if (reportsData.length) {
     lines.push(`## 🆕 今日新物件（${reportsData.length} 筆，依分數降序）`);
     lines.push('');
-    lines.push('| 分 | 區 | 月租 | 坪數 | 格局 | ⚠️ | 報告 | 591 |');
+    lines.push('> 🟢 ≥ 4.0　🟡 ≥ 3.5　🔴 < 3.5　|　⚠️ = 含 Deal-Breaker（評估報告中標出重大缺陷，建議避開）');
+    lines.push('');
+    lines.push('| 分數 | 行政區 | 月租 | 坪數 | 格局 | 警示 | 報告 | 591 |');
     lines.push('|---|---|---|---|---|---|---|---|');
     for (const r of reportsData) {
       const district = DIST_FROM_ADDR(r.address);
@@ -189,10 +192,16 @@ function writeDailyReportHtml(scan, data) {
 
 async function main() {
   const dryRun = process.argv.includes('--dry-run');
+  const emailOnly = process.argv.includes('--email-only');
+  const noEmail = process.argv.includes('--no-email');
+  const skipScan = dryRun || emailOnly;
+  const sendEmail = !noEmail && (emailOnly || !dryRun);
+
   let scan, newReports;
 
-  if (dryRun) {
-    console.error(`[daily] === DRY RUN: re-render from cached scan + today's reports ===`);
+  if (skipScan) {
+    const label = emailOnly ? 'EMAIL-ONLY' : 'DRY RUN';
+    console.error(`[daily] === ${label}: re-render from cached scan + today's reports ===`);
     scan = loadCachedScan();
     newReports = findTodayReports();
     console.error(`[daily] found ${newReports.length} individual reports for ${TODAY}`);
@@ -206,12 +215,27 @@ async function main() {
   writeDailyReportHtml(scan, data);
 
   console.error(`\n━━━━━━━━━━━━━━━━━━━━━━━━`);
-  console.error(`Daily Run — ${TODAY} 完成${dryRun ? ' (dry-run)' : ''}`);
+  console.error(`Daily Run — ${TODAY} 完成${dryRun ? ' (dry-run)' : emailOnly ? ' (email-only)' : ''}`);
   console.error(`━━━━━━━━━━━━━━━━━━━━━━━━`);
-  console.error(`新物件：${scan.newItems.length} 筆 → ${dryRun ? '重新渲染' : '產'} ${newReports.length} 份報告`);
+  console.error(`新物件：${scan.newItems.length} 筆 → ${skipScan ? '重新渲染' : '產'} ${newReports.length} 份報告`);
   console.error(`價格變動：${scan.priceChanged.length} 筆`);
   console.error(`已下架：${scan.expired.length} 筆`);
   console.error(`日報：reports/daily/${TODAY}.md + .html`);
+
+  if (sendEmail) {
+    const result = await sendDailyEmail({
+      scan, data, today: TODAY,
+      mdPath: resolve(DAILY_DIR, `${TODAY}.md`),
+      htmlPath: resolve(DAILY_DIR, `${TODAY}.html`),
+    });
+    if (result.ok) {
+      console.error(`✓ Email 已寄出至 ${process.env.NOTIFY_EMAIL_TO}`);
+    } else {
+      console.error(`⚠ Email 跳過：${result.reason}`);
+    }
+  } else if (noEmail) {
+    console.error(`⊘ Email 已停用 (--no-email)`);
+  }
 }
 
 main().catch(e => { console.error(e); process.exit(1); });

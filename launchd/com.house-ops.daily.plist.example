@@ -32,6 +32,13 @@
   <dict>
     <key>PATH</key>
     <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <!-- Daily report email notification (optional). See docs/email-setup.md -->
+    <key>GMAIL_USER</key>
+    <string>YOUR_GMAIL_ADDRESS@gmail.com</string>
+    <key>GMAIL_APP_PASSWORD</key>
+    <string>YOUR_16_CHAR_APP_PASSWORD</string>
+    <key>NOTIFY_EMAIL_TO</key>
+    <string>YOUR_RECIPIENT_ADDRESS@gmail.com</string>
   </dict>
 
   <key>RunAtLoad</key>

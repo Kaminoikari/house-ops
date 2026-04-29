@@ -116,11 +116,11 @@ ${listings.length ? `<div class="controls">
 <thead>
 <tr>
   <th data-sort="score" class="sort-desc">分數</th>
-  <th data-sort="district">區</th>
+  <th data-sort="district">行政區</th>
   <th data-sort="rent">月租</th>
   <th data-sort="size">坪數</th>
   <th class="layout-col">格局</th>
-  <th>⚠️</th>
+  <th title="含 Deal-Breaker = 評估報告中標出重大缺陷">警示</th>
   <th>連結</th>
 </tr>
 </thead>
