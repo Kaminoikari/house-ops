@@ -13,12 +13,22 @@ tracked_portals:
   - name: "591 租屋"
     type: rent
     enabled: true
+    source: 591
     url_template: "https://rent.591.com.tw/list?region=3&section=26&shape=2,4,6&rentprice=0,{rent_max}&area={size_min},&kind=1,2"
 
   - name: "591 買屋"
     type: buy
     enabled: false
+    source: 591
     url_template: "https://sale.591.com.tw/?region={region_code}&price=0,{buy_max}&area={size_min},"
+
+  - name: "FB 台北租屋社團"
+    type: rent
+    enabled: true
+    source: facebook_group
+    group_url: "https://www.facebook.com/groups/464870710346711/"
+    group_id: "464870710346711"
+    scroll_rounds: 20
 
 market_reference:
   lvr_api:

@@ -15,12 +15,24 @@ tracked_portals:
   - name: "591 租屋"
     type: rent
     enabled: true
+    source: 591
     url_template: "https://rent.591.com.tw/?region={region_code}&section={section_codes}&rentprice=0,{rent_max}&area={size_min},"
 
   - name: "591 買屋"
     type: buy
     enabled: true
+    source: 591
     url_template: "https://sale.591.com.tw/?region={region_code}&price=0,{buy_max}&area={size_min},"
+
+  # FB 公開租屋社團（需設定 ANTHROPIC_API_KEY + chrome-debug launchd，詳見 README）
+  # 啟用前先把 group_url / group_id 改成目標社團的值，再把 enabled 改為 true
+  - name: "FB 台北租屋社團"
+    type: rent
+    enabled: false
+    source: facebook_group
+    group_url: "https://www.facebook.com/groups/REPLACE_WITH_GROUP_ID/"
+    group_id: "REPLACE_WITH_GROUP_ID"
+    scroll_rounds: 20
 
 market_reference:
   lvr_api:

@@ -39,6 +39,9 @@
     <string>YOUR_16_CHAR_APP_PASSWORD</string>
     <key>NOTIFY_EMAIL_TO</key>
     <string>YOUR_RECIPIENT_ADDRESS@gmail.com</string>
+    <!-- FB social group LLM extraction (optional). See lib/extract-fb-post.mjs -->
+    <key>ANTHROPIC_API_KEY</key>
+    <string>YOUR_ANTHROPIC_API_KEY</string>
   </dict>
 
   <key>RunAtLoad</key>

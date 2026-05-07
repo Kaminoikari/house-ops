@@ -4,6 +4,8 @@
 
 支援三種使用者類型：**租屋族**、**首購族**、**換屋族**。
 
+**資料來源**：591 全平台 + FB 公開租屋社團（透過 CDP 合成觸控手勢繞過 anti-bot，由 Claude API 從自由格式貼文自動抽取結構化欄位）。
+
 ---
 
 ## Demo
@@ -23,6 +25,11 @@
 ### 自動化（腳本層，可獨立執行）
 
 - **掃描 591** 上架物件並依 `config/profile.yml` 條件初篩（`scan-591.mjs`）
+- **掃描 FB 公開租屋社團**（`scan-fb.mjs`）：
+  - 透過 CDP `Input.synthesizeScrollGesture` 合成觸控手勢，繞過 FB anti-bot lazy-load 限制
+  - 自動把社團排序切換到「New posts」確保抓到最新貼文
+  - 點擊「See more」展開摺疊內文
+  - 正則粗篩出疑似租屋貼文 → Claude API（haiku 4.5）抽結構化欄位（價格、地址、坪數、房型、聯絡）
 - **評估** 從 591 頁面擷取資料後，以五維度啟發式評分（`eval-591.mjs`）：
   - 價格合理性（依單坪租金門檻判斷）
   - 空間與格局（坪數 + 房廳數）
@@ -30,7 +37,7 @@
   - 物件條件（電梯、陽台、總樓層、裝潢字樣）
   - 風險與潛力（社宅、deal-breaker 命中、建物類型）
 - **追蹤** `data/tracker.md` 結構化表格，搭配 `merge-tracker.mjs` / `dedup-tracker.mjs` / `verify-pipeline.mjs`
-- **每日排程** launchd 觸發 `run-daily.mjs`：scan + eval + 寫日報 (md + html) + email 通知
+- **每日排程** launchd 觸發 `run-daily.mjs`：591 scan + FB scan + eval + 寫日報 (md + html) + email 通知（FB 物件單獨成區塊）
 
 ### 互動式 Mode（Claude Code 會話中觸發）
 
@@ -46,19 +53,24 @@
 
 ## 事前準備
 
-掃描（`scan`）與物件上架驗證依賴 `agent-browser`，**使用前必須安裝**：
+### agent-browser（必裝）
+
+掃描（`scan`）與物件上架驗證依賴 `agent-browser`：
 
 ```bash
 npm install -g agent-browser
-```
-
-確認安裝成功：
-
-```bash
 agent-browser --version
 ```
 
 > 未安裝的情況下執行 `scan` 或貼上 URL，Claude 將無法爬取真實頁面內容，後續評估結果不可信。
+
+### Anthropic API key（FB 整合需要）
+
+FB 社團貼文是自由格式文字，需要 Claude API 抽取結構化欄位（每篇成本約 USD 0.001）。**只用 591 不需此 key**。
+
+到 <https://console.anthropic.com> 申請 → 加值（USD 5 起跳即可跑很久） → 把 key 寫入 `~/Library/LaunchAgents/com.house-ops.daily.plist` 的 `EnvironmentVariables` 區塊（範本見 `launchd/com.house-ops.daily.plist.example`）。
+
+未設此 key 時 FB scan 會 fallback 為「只寫原文到 pipeline.md，不做結構化」，整體 daily 流程不會 fail。
 
 ---
 
@@ -123,9 +135,10 @@ agent-browser --version
 ```bash
 # 日常
 node scripts/scan-591.mjs         # 爬蟲：依 profile.yml 條件掃 591
+node scripts/scan-fb.mjs          # 爬蟲：依 portals.yml 掃 FB 公開社團，LLM 抽結構化欄位
 node scripts/eval-591.mjs --from-pipeline 10   # 評估 pipeline 前 10 筆（同步產 .md + .html）
 node scripts/rank-listings.mjs --rewrite       # Phase 1.5 排序重寫 pipeline.md
-node scripts/run-daily.mjs        # 🌅 一鍵跑：scan → eval 今日新 → 寫日報 (md + html) → 寄 email
+node scripts/run-daily.mjs        # 🌅 一鍵跑：scan 591 + FB → eval 今日新 → 寫日報 (md + html) → 寄 email
 
 # 維護
 node scripts/convert-reports-html.mjs  # 批次將 reports/*.md 轉成 .html（個別物件報告）
@@ -211,6 +224,80 @@ sudo pmset repeat wakeorpoweron MTWRF 08:55:00
 launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.house-ops.daily.plist
 rm ~/Library/LaunchAgents/com.house-ops.daily.plist
 ```
+
+---
+
+## FB 公開社團整合
+
+每天自動掃 FB 公開租屋社團最新貼文，抽出結構化欄位後與 591 一起評估。
+
+### 為什麼這樣做
+
+- Facebook Graph API 已於 2024-04 完全 deprecate Groups API，不存在合法 API 路徑
+- 純 JS scroll、`agent-browser scroll`、keyboard PageDown、CDP `Input.dispatchMouseEvent` 都被 FB anti-bot 偵測，feed 不會 paginate
+- 唯一可行的繞過方式：**CDP `Input.synthesizeScrollGesture`**（合成觸控手勢，FB 視為實體 trackpad 滾動）
+- 由 `lib/cdp-scroll.mjs` 直接連 Chrome DevTools WebSocket 觸發，不過 agent-browser
+
+### 安裝步驟
+
+1. **配置社團**：編輯 `portals.yml`，新增條目（範本見 `portals.example.yml`）：
+   ```yaml
+   tracked_portals:
+     - name: "FB 台北租屋社團"
+       type: rent
+       enabled: true
+       source: facebook_group
+       group_url: "https://www.facebook.com/groups/{group_id}/"
+       group_id: "{group_id}"
+       scroll_rounds: 20    # 每輪約捲 900px，20 輪約 18000px 抓到 30+ 篇貼文
+   ```
+
+2. **啟動專用 Chrome 實例**（與你日常 Chrome 完全隔離，避免互相干擾）：
+   ```bash
+   cp launchd/com.house-ops.chrome-debug.plist.example ~/Library/LaunchAgents/com.house-ops.chrome-debug.plist
+   # 編輯該檔，把 YOUR_USERNAME 換成你的 macOS 使用者名稱
+   launchctl load -w ~/Library/LaunchAgents/com.house-ops.chrome-debug.plist
+   ```
+
+   plist 設定 `RunAtLoad: true` + `KeepAlive: true`，Chrome 會在開機時自動啟動，當機也會自動重啟。專用 profile 路徑為 `.chrome-profile/`（已 gitignore）。
+
+3. **首次手動登入 FB**（一次性，cookie 持久化）：
+   - 自動跳出的 Chrome 視窗中，打開 `https://facebook.com` 登入
+   - 加入目標社團（公開社團也要先按「加入」才能看完整內容）
+   - 之後 launchd 重啟也不用再登入
+
+4. **加 ANTHROPIC_API_KEY**：見上方「事前準備」section。
+
+5. **驗證**：
+   ```bash
+   curl -s http://localhost:9222/json/version | head -c 200   # CDP 在聽
+   export ANTHROPIC_API_KEY=$(plutil -extract EnvironmentVariables.ANTHROPIC_API_KEY raw ~/Library/LaunchAgents/com.house-ops.daily.plist)
+   node scripts/scan-fb.mjs                                    # 端對端 dry run
+   ```
+
+### Pipeline 流程
+
+```
+[role="feed"] → 排序切換為 "New posts"（CDP 點擊 + 等渲染）
+   ↓
+CDP synthesizeScrollGesture × N 輪（每輪 900px，wait 2.2s 給 FB 渲染）
+   ↓
+EXTRACT_JS：每張貼文卡片用 [data-ad-preview="message"] 拿主文字（自動排除留言）
+   ↓
+正則粗篩（含「月租 / 押金 / 4-5 位數字」+ 排除「#求租」hashtag）
+   ↓
+Claude haiku 4.5 抽 { price_num, address, district, size, layout, contact, confidence }
+   ↓
+profile.yml Phase 1 過濾 → pipeline.md (## FB Pending) + scan-history.tsv (source=facebook)
+```
+
+### 限制與已知行為
+
+- **無真 permalink**：FB 在 New posts 排序下不在卡片內提供 `/posts/` 連結，pseudo permalink 用 `#post-{user_id}-{text_hash}` 作為 dedup key；點擊回到社團首頁而非單篇貼文
+- **覆蓋率非 100%**：FB 演算法本身就會隱藏部分貼文，連手動瀏覽也看不全
+- **Anti-bot 軍備競賽**：FB 隨時可能識破合成手勢，到時須換手段（如 puppeteer-extra-stealth、Bright Data）
+- **違反 FB ToS**：自動化抓取違反 Terms of Service §3.2.3，請斟酌使用；若你的 FB 帳號被風控，請降低 `scroll_rounds` 或擴大每天觸發間隔
+- **單篇貼文評估**：使用者貼 `facebook.com/groups/.../posts/...` URL 給 Claude 時走 `modes/fb-eval.md` 流程，但 FB 在某些排序下不提供穩定 permalink，single-post URL 可能無法 reliably 開啟
 
 ---
 

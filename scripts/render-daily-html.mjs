@@ -59,6 +59,17 @@ export function renderDailyHtml(scan, data, today) {
     expired: scan.expired?.length ?? 0,
   };
 
+  const fb = scan.fb || null;
+  const fbItems = (fb?.qualified || []).map(f => ({
+    district: f.district || '?',
+    rent: f.price_num ?? null,
+    size: f.size ?? null,
+    layout: f.layout || '—',
+    contact: f.contact || '—',
+    permalink: f.permalink || '',
+    excerpt: (f.text || '').slice(0, 80).replace(/\s+/g, ' '),
+  }));
+
   const generatedAt = new Date().toISOString();
 
   return `<!DOCTYPE html>
@@ -84,6 +95,7 @@ export function renderDailyHtml(scan, data, today) {
   <div class="stat"><div class="label">既有仍在架</div><div class="value">${summary.refreshed}</div></div>
   <div class="stat"><div class="label">價格變動</div><div class="value">${summary.priceChanged}</div></div>
   <div class="stat"><div class="label">已下架</div><div class="value">${summary.expired}</div></div>
+  ${fb ? `<div class="stat"><div class="label">FB 通過評估</div><div class="value">${fbItems.length}</div></div>` : ''}
 </section>
 
 <h2>🆕 今日新物件 <span class="count">（${listings.length} 筆已評估 · 點欄位標題排序）</span></h2>
@@ -133,6 +145,32 @@ ${priceChanges.length ? `<h2>💰 價格變動警示 <span class="count">（${pr
 
 ${districts.length ? `<h2>📊 各區新增</h2>
 <div class="districts-grid" id="districtsGrid"></div>` : ''}
+
+${fbItems.length ? `<h2>📘 FB 社團通過評估 <span class="count">（${fbItems.length} 筆 · 抽自貼文，無評分，請肉眼複核）</span></h2>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+  <th>行政區</th>
+  <th>月租</th>
+  <th>坪數</th>
+  <th class="layout-col">格局</th>
+  <th>聯絡</th>
+  <th>貼文</th>
+</tr>
+</thead>
+<tbody>
+${fbItems.map(f => `<tr>
+  <td><span class="district">${f.district}</span></td>
+  <td class="num">${f.rent != null ? f.rent.toLocaleString() : '?'}</td>
+  <td class="num">${f.size ?? '?'}</td>
+  <td>${f.layout}</td>
+  <td>${f.contact.replace(/[<>]/g, '')}</td>
+  <td><a class="btn" href="${f.permalink}" target="_blank">FB</a></td>
+</tr>`).join('')}
+</tbody>
+</table>
+</div>` : (fb ? `<h2>📘 FB 社團掃描</h2><p style="color:var(--muted);padding:14px 16px;background:var(--panel);border:1px solid var(--border);border-radius:10px;">本次掃描 ${fb.totalFound ?? 0} 篇貼文，粗篩通過 ${fb.prefilterPassed ?? 0}，無物件通過評估。${fb.missingApiKey ? '<br>⚠️ ANTHROPIC_API_KEY 未設，已跳過 LLM 階段。' : ''}${fb.error ? `<br>⚠️ ${fb.error}` : ''}</p>` : '')}
 
 ${allDelisted.length ? `<h2>💀 已下架 <span class="count">（${summary.expired} 筆）</span></h2>
 <details>

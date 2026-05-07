@@ -147,7 +147,9 @@ function parseHistory() {
       url,
       first_seen: cols[idx.first_seen] || '',
       last_seen:  cols[idx.last_seen]  || cols[idx.first_seen] || '',
+      source:     cols[idx.source]     || '591',
       portal:     cols[idx.portal]     || '',
+      external_id: cols[idx.external_id] || (url.split('/').filter(Boolean).pop() || '').split('?')[0],
       title:      cols[idx.title]      || '',
       address:    cols[idx.address]    || '',
       normalized: cols[idx.normalized_address] || '',
@@ -162,7 +164,7 @@ function parseHistory() {
 }
 
 const HISTORY_HEADER = [
-  'url', 'first_seen', 'last_seen', 'portal', 'title',
+  'url', 'first_seen', 'last_seen', 'source', 'portal', 'external_id', 'title',
   'address', 'normalized_address', 'price', 'size', 'status', 'price_history'
 ];
 
@@ -170,8 +172,9 @@ function writeHistory(map) {
   const rows = [HISTORY_HEADER.join('\t')];
   for (const h of map.values()) {
     rows.push([
-      h.url, h.first_seen, h.last_seen, h.portal, h.title,
-      h.address, h.normalized, h.price_raw, h.size, h.status, h.price_history,
+      h.url, h.first_seen, h.last_seen, h.source || '591', h.portal,
+      h.external_id || (h.url.split('/').filter(Boolean).pop() || '').split('?')[0],
+      h.title, h.address, h.normalized, h.price_raw, h.size, h.status, h.price_history,
     ].map(v => String(v ?? '')).join('\t'));
   }
   writeFileSync(HISTORY_PATH, rows.join('\n') + '\n');
@@ -248,7 +251,9 @@ async function main() {
   const now = history;
   for (const l of newItems) {
     now.set(l.url, {
-      url: l.url, first_seen: TODAY, last_seen: TODAY, portal: '591 租屋',
+      url: l.url, first_seen: TODAY, last_seen: TODAY,
+      source: '591', portal: '591 租屋',
+      external_id: (l.url.split('/').filter(Boolean).pop() || '').split('?')[0],
       title: l.title, address: l.address, normalized: normalize(l.address),
       price_raw: l.price_raw, price_num: l.price_num, size: l.size ?? '',
       status: 'Added', price_history: `${TODAY}:${l.price_num ?? ''}`,
@@ -266,7 +271,9 @@ async function main() {
   for (const s of skipped) {
     if (now.has(s.url)) continue;
     now.set(s.url, {
-      url: s.url, first_seen: TODAY, last_seen: TODAY, portal: '591 租屋',
+      url: s.url, first_seen: TODAY, last_seen: TODAY,
+      source: '591', portal: '591 租屋',
+      external_id: (s.url.split('/').filter(Boolean).pop() || '').split('?')[0],
       title: s.title, address: s.address, normalized: normalize(s.address),
       price_raw: s.price_raw, price_num: s.price_num, size: s.size ?? '',
       status: 'skipped_title', price_history: `${TODAY}:${s.price_num ?? ''}`,
