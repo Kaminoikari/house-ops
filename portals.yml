@@ -22,9 +22,12 @@ tracked_portals:
     source: 591
     url_template: "https://sale.591.com.tw/?region={region_code}&price=0,{buy_max}&area={size_min},"
 
+  # 暫停 FB 社團爬蟲：抽到的 permalink 點進去常找不到對應貼文（FB DOM 變動 +
+  # EXTRACT_JS 在抓不到真實 /posts/{id}/ 連結時 fallback 到 hash anchor 假連結）。
+  # 待重新設計爬蟲機制後再開啟。
   - name: "FB 台北租屋社團"
     type: rent
-    enabled: true
+    enabled: false
     source: facebook_group
     group_url: "https://www.facebook.com/groups/464870710346711/"
     group_id: "464870710346711"

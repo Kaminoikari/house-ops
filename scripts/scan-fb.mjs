@@ -311,7 +311,7 @@ async function main() {
   const profile = YAML.parse(readFileSync(PROFILE_PATH, 'utf8'));
   const fbPortals = (portals.tracked_portals || [])
     .filter(p => p.enabled && p.source === 'facebook_group');
-  if (!fbPortals.length) { console.error('[fb] portals.yml 無 facebook_group，略過'); if (wantJson) process.stdout.write(JSON.stringify({ today: TODAY, totalFound: 0, qualified: [], skipped: [], newItems: [], refreshed: [], skipped_prefilter: 0, skipped_extract: 0 }) + '\n'); return; }
+  if (!fbPortals.length) { console.error('[fb] portals.yml 無啟用中的 facebook_group（皆 enabled: false 或不存在），略過'); if (wantJson) process.stdout.write(JSON.stringify({ today: TODAY, totalFound: 0, qualified: [], skipped: [], newItems: [], refreshed: [], skipped_prefilter: 0, skipped_extract: 0 }) + '\n'); return; }
 
   // CDP 連線
   const conn = safeRun(`agent-browser connect ${CDP_PORT}`);
