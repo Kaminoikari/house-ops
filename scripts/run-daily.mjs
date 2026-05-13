@@ -30,8 +30,13 @@ function runScan() {
   const jsonLine = out.trim().split('\n').pop();
   const scan = JSON.parse(jsonLine);
 
-  console.error(`[daily] === Scan FB ===`);
-  scan.fb = runScanFb();
+  if (process.env.SKIP_FB === '1') {
+    console.error(`[daily] === Scan FB 已停用（SKIP_FB=1） ===`);
+    scan.fb = { today: TODAY, paused: true, totalFound: 0, qualified: [], skipped: [], newItems: [], refreshed: [], llmOk: 0, llmFail: 0 };
+  } else {
+    console.error(`[daily] === Scan FB ===`);
+    scan.fb = runScanFb();
+  }
 
   writeFileSync(SCAN_CACHE, JSON.stringify(scan, null, 2));
   console.error(`[daily] cached scan → ${SCAN_CACHE}`);
@@ -136,9 +141,13 @@ function writeDailyReport(scan, data) {
   lines.push(`- 價格變動：${scan.priceChanged.length}`);
   lines.push(`- 已下架：${scan.expired.length}`);
   if (scan.fb) {
-    lines.push(`- **FB 社團掃描**：${scan.fb.totalFound ?? 0} 篇貼文 → 粗篩 ${scan.fb.prefilterPassed ?? 0} → LLM 抽取 ${scan.fb.llmOk ?? 0} → 通過評估 ${scan.fb.qualified?.length ?? 0}（新增 ${scan.fb.newItems?.length ?? 0}）`);
-    if (scan.fb.error) lines.push(`  - ⚠️ FB scan 異常：${scan.fb.error}`);
-    if (scan.fb.missingApiKey) lines.push(`  - ⚠️ ANTHROPIC_API_KEY 未設，已跳過 LLM 階段`);
+    if (scan.fb.paused) {
+      lines.push(`- **FB 社團掃描**：⏸ 已暫停（SKIP_FB=1）`);
+    } else {
+      lines.push(`- **FB 社團掃描**：${scan.fb.totalFound ?? 0} 篇貼文 → 粗篩 ${scan.fb.prefilterPassed ?? 0} → LLM 抽取 ${scan.fb.llmOk ?? 0} → 通過評估 ${scan.fb.qualified?.length ?? 0}（新增 ${scan.fb.newItems?.length ?? 0}）`);
+      if (scan.fb.error) lines.push(`  - ⚠️ FB scan 異常：${scan.fb.error}`);
+      if (scan.fb.missingApiKey) lines.push(`  - ⚠️ ANTHROPIC_API_KEY 未設，已跳過 LLM 階段`);
+    }
   }
   lines.push('');
 

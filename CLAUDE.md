@@ -35,6 +35,13 @@ On every session start, run these checks **silently** (no output to the user unl
 Onboarding 流程詳見 `docs/onboarding.md`。
 
 **觸發條件**：當 `config/profile.yml`、`portals.yml`、`data/tracker.md`、`data/pipeline.md`、`modes/_profile.md` 任一缺失時，進入 Onboarding 模式，依該文件 7 步流程協助使用者建立設定。
+
+---
+
+## Operations
+
+- FB 社團爬蟲開關（暫停／恢復）：見 `docs/fb-scan-toggle.md`。`SKIP_FB=1` 環境變數可在 launchd plist 或手動執行時控制 FB scan 是否運作；591 掃描不受影響。
+
 ---
 
 ## Main Files
