@@ -20,11 +20,13 @@
   <key>StandardErrorPath</key>
   <string>/Users/YOUR_USERNAME/house-ops/data/logs/chrome-debug.err.log</string>
 
-  <!-- Start at login + auto-restart if Chrome quits, so port 9222 is always live for scan-fb.mjs -->
+  <!-- On-demand：不在登入時自動起、Chrome 退出時也不自動拉回。 -->
+  <!-- run-daily.mjs 跑 FB scan 前會 launchctl kickstart 拉起、跑完 stop。 -->
+  <!-- 首次登入 FB 或要手動跑 scan-fb.mjs 時：launchctl start com.house-ops.chrome-debug -->
   <key>RunAtLoad</key>
-  <true/>
+  <false/>
 
   <key>KeepAlive</key>
-  <true/>
+  <false/>
 </dict>
 </plist>

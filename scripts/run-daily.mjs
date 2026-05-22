@@ -13,8 +13,12 @@ import { writeFileSync, mkdirSync, existsSync, readdirSync, readFileSync } from 
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { renderDailyHtml } from './render-daily-html.mjs';
 import { sendDailyEmail } from '../lib/notify-email.mjs';
+
+const CDP_LABEL = 'com.house-ops.chrome-debug';
+const CDP_PORT = 9222;
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const TODAY = new Date().toISOString().slice(0, 10);
@@ -24,7 +28,39 @@ if (!existsSync(DAILY_DIR)) mkdirSync(DAILY_DIR, { recursive: true });
 
 const run = (cmd) => execSync(cmd, { encoding: 'utf8', stdio: ['inherit', 'pipe', 'inherit'], maxBuffer: 100 * 1024 * 1024 });
 
-function runScan() {
+async function isCdpReady() {
+  try {
+    const res = await fetch(`http://localhost:${CDP_PORT}/json/version`, { signal: AbortSignal.timeout(800) });
+    return res.ok;
+  } catch { return false; }
+}
+
+async function ensureChromeDebug({ timeoutMs = 15000 } = {}) {
+  if (await isCdpReady()) return { alreadyRunning: true };
+  console.error(`[daily] 啟動 chrome-debug (${CDP_LABEL})...`);
+  try {
+    execSync(`launchctl kickstart gui/$(id -u)/${CDP_LABEL}`, { stdio: 'ignore' });
+  } catch (e) {
+    return { alreadyRunning: false, started: false, error: e.message };
+  }
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await isCdpReady()) return { alreadyRunning: false, started: true };
+    await sleep(500);
+  }
+  return { alreadyRunning: false, started: false, timeout: true };
+}
+
+function stopChromeDebug() {
+  try {
+    execSync(`launchctl stop ${CDP_LABEL}`, { stdio: 'ignore' });
+    console.error(`[daily] 已停止 chrome-debug`);
+  } catch {
+    // stop 失敗通常代表已經沒在跑，可忽略
+  }
+}
+
+async function runScan() {
   console.error(`[daily] === Scan 591 ===`);
   const out = run(`node ${resolve(ROOT, 'scripts/scan-591.mjs')} --json`);
   const jsonLine = out.trim().split('\n').pop();
@@ -35,7 +71,7 @@ function runScan() {
     scan.fb = { today: TODAY, paused: true, totalFound: 0, qualified: [], skipped: [], newItems: [], refreshed: [], llmOk: 0, llmFail: 0 };
   } else {
     console.error(`[daily] === Scan FB ===`);
-    scan.fb = runScanFb();
+    scan.fb = await runScanFb();
   }
 
   writeFileSync(SCAN_CACHE, JSON.stringify(scan, null, 2));
@@ -43,7 +79,13 @@ function runScan() {
   return scan;
 }
 
-function runScanFb() {
+async function runScanFb() {
+  const debugState = await ensureChromeDebug();
+  if (debugState.timeout || debugState.error) {
+    const reason = debugState.error || 'chrome_debug_timeout';
+    console.error(`[daily] FB scan 跳過：chrome-debug 未就緒（${reason}）`);
+    return { today: TODAY, error: reason, totalFound: 0, qualified: [], skipped: [], newItems: [], refreshed: [], llmOk: 0, llmFail: 0 };
+  }
   try {
     const out = run(`node ${resolve(ROOT, 'scripts/scan-fb.mjs')} --json`);
     const jsonLine = out.trim().split('\n').filter(Boolean).pop();
@@ -51,6 +93,9 @@ function runScanFb() {
   } catch (e) {
     console.error(`[daily] FB scan 失敗（不致命，pipeline 繼續）：${e.message}`);
     return { today: TODAY, error: e.message, totalFound: 0, qualified: [], skipped: [], newItems: [], refreshed: [], llmOk: 0, llmFail: 0 };
+  } finally {
+    // 只關掉本次自己拉起來的；user 手動 start 在跑的不動。
+    if (!debugState.alreadyRunning) stopChromeDebug();
   }
 }
 
@@ -254,7 +299,7 @@ async function main() {
     newReports = findTodayReports();
     console.error(`[daily] found ${newReports.length} individual reports for ${TODAY}`);
   } else {
-    scan = runScan();
+    scan = await runScan();
     newReports = runEvalOnNewItems(scan.newItems);
   }
 

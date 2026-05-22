@@ -252,19 +252,26 @@ rm ~/Library/LaunchAgents/com.house-ops.daily.plist
        scroll_rounds: 20    # 每輪約捲 900px，20 輪約 18000px 抓到 30+ 篇貼文
    ```
 
-2. **啟動專用 Chrome 實例**（與你日常 Chrome 完全隔離，避免互相干擾）：
+2. **註冊專用 Chrome 實例的 LaunchAgent**（與你日常 Chrome 完全隔離，避免互相干擾）：
    ```bash
    cp launchd/com.house-ops.chrome-debug.plist.example ~/Library/LaunchAgents/com.house-ops.chrome-debug.plist
    # 編輯該檔，把 YOUR_USERNAME 換成你的 macOS 使用者名稱
-   launchctl load -w ~/Library/LaunchAgents/com.house-ops.chrome-debug.plist
+   launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.house-ops.chrome-debug.plist
    ```
 
-   plist 設定 `RunAtLoad: true` + `KeepAlive: true`，Chrome 會在開機時自動啟動，當機也會自動重啟。專用 profile 路徑為 `.chrome-profile/`（已 gitignore）。
+   plist 設定 `RunAtLoad: false` + `KeepAlive: false`，採 **on-demand** 模式：
+   - 不會在登入時自動啟動，也不會在你關閉時被自動拉回，**不會干擾你日常 Chrome**。
+   - 每日排程 `run-daily.mjs` 跑到 FB scan 階段時，會自動 `launchctl kickstart` 拉起、跑完 `stop`。
+   - 專用 profile 路徑為 `.chrome-profile/`（已 gitignore）。
 
 3. **首次手動登入 FB**（一次性，cookie 持久化）：
-   - 自動跳出的 Chrome 視窗中，打開 `https://facebook.com` 登入
+   ```bash
+   launchctl start com.house-ops.chrome-debug   # 手動拉起一次
+   ```
+   - 跳出的 Chrome 視窗中，打開 `https://facebook.com` 登入
    - 加入目標社團（公開社團也要先按「加入」才能看完整內容）
-   - 之後 launchd 重啟也不用再登入
+   - 完成後關閉視窗即可（KeepAlive=false 不會被拉回），或 `launchctl stop com.house-ops.chrome-debug`
+   - cookies 持久化在 `.chrome-profile/`，之後 run-daily 拉起時自動沿用，不用再登入
 
 4. **加 ANTHROPIC_API_KEY**：見上方「事前準備」section。
 
